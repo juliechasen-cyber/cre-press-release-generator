@@ -138,3 +138,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--focus); out
   text-align: center; color: var(--ink-muted); font-size: 12px;
   padding: 24px; border-top: 1px solid var(--line); margin-top: 40px;
 }
+.footer-note p + p { margin-top: 8px; }
+.footer-credit a { color: inherit; text-decoration: underline; }
+.footer-credit a:hover { color: var(--ink); }
