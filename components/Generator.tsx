@@ -119,7 +119,15 @@ export default function Generator() {
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [showEmail, setShowEmail] = useState(false);
-  const [emailForm, setEmailForm] = useState({ email: "", name: "", subscribe_northstar: false });
+  const [emailForm, setEmailForm] = useState({
+    first_name: "",
+    last_name: "",
+    company: "",
+    title: "",
+    email: "",
+    phone: "",
+    subscribe_northstar: false,
+  });
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailSent, setEmailSent] = useState<string | null>(null);
 
@@ -322,6 +330,10 @@ export default function Generator() {
 
   const sendEmail = async () => {
     if (!result) return;
+    if (!emailForm.first_name.trim() || !emailForm.last_name.trim()) {
+      setFlash("Enter your first and last name.");
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailForm.email)) {
       setFlash("Enter a valid email address.");
       return;
@@ -332,8 +344,12 @@ export default function Generator() {
       fd.set(
         "payload",
         JSON.stringify({
-          email: emailForm.email,
-          name: emailForm.name || undefined,
+          first_name: emailForm.first_name.trim(),
+          last_name: emailForm.last_name.trim(),
+          company: emailForm.company.trim(),
+          title: emailForm.title.trim(),
+          email: emailForm.email.trim(),
+          phone: emailForm.phone.trim(),
           subscribe_northstar: emailForm.subscribe_northstar,
           draft_text: result.draft_text,
           brief: result.brief,
@@ -803,8 +819,43 @@ export default function Generator() {
               <div className="email-card">
                 <h3>Send this draft to your inbox</h3>
                 <div className="section-note">
-                  We&apos;ll email you the .docx and .pdf so you have them for
-                  later. That&apos;s it.
+                  We&apos;ll email you the .docx and .pdf so you have them for later.
+                </div>
+                <div className="row-2">
+                  <div className="field">
+                    <label>First name</label>
+                    <input
+                      type="text"
+                      value={emailForm.first_name}
+                      onChange={(e) => setEmailForm((s) => ({ ...s, first_name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Last name</label>
+                    <input
+                      type="text"
+                      value={emailForm.last_name}
+                      onChange={(e) => setEmailForm((s) => ({ ...s, last_name: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="row-2">
+                  <div className="field">
+                    <label>Company</label>
+                    <input
+                      type="text"
+                      value={emailForm.company}
+                      onChange={(e) => setEmailForm((s) => ({ ...s, company: e.target.value }))}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Title</label>
+                    <input
+                      type="text"
+                      value={emailForm.title}
+                      onChange={(e) => setEmailForm((s) => ({ ...s, title: e.target.value }))}
+                    />
+                  </div>
                 </div>
                 <div className="field">
                   <label>Email address</label>
@@ -816,11 +867,12 @@ export default function Generator() {
                   />
                 </div>
                 <div className="field">
-                  <label>Your name (optional)</label>
+                  <label>Phone</label>
                   <input
-                    type="text"
-                    value={emailForm.name}
-                    onChange={(e) => setEmailForm((s) => ({ ...s, name: e.target.value }))}
+                    type="tel"
+                    value={emailForm.phone}
+                    onChange={(e) => setEmailForm((s) => ({ ...s, phone: e.target.value }))}
+                    placeholder="(optional)"
                   />
                 </div>
                 <label className="checkbox-row">

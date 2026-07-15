@@ -9,8 +9,12 @@ export const maxDuration = 45;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 type SendPayload = {
+  first_name: string;
+  last_name: string;
+  company?: string;
+  title?: string;
   email: string;
-  name?: string;
+  phone?: string;
   subscribe_northstar?: boolean;
   draft_text: string;
   brief: UserBrief;
@@ -42,6 +46,12 @@ export async function POST(request: Request) {
   if (!emailOk) {
     return NextResponse.json(
       { error: "bad_email", message: "Enter a valid email address." },
+      { status: 400 },
+    );
+  }
+  if (!payload.first_name?.trim() || !payload.last_name?.trim()) {
+    return NextResponse.json(
+      { error: "missing_name", message: "First name and last name are required." },
       { status: 400 },
     );
   }
@@ -99,7 +109,7 @@ export async function POST(request: Request) {
 
   const resend = new Resend(apiKey);
 
-  const greeting = payload.name ? `Hi ${payload.name},` : "Hi there,";
+  const greeting = `Hi ${payload.first_name},`;
   const body =
     `${greeting}\n\n` +
     `Here's the draft you generated on the CRE Press Release Generator. ` +
@@ -144,9 +154,32 @@ export async function POST(request: Request) {
     );
   }
 
-  // TODO: if payload.subscribe_northstar is true, enqueue the delayed welcome
-  // email or add the address to whatever list system CRE Northstar uses.
-  // Left as a TODO in v0.1 — spec is in 01_scope/output/email-flow.md §2.
+  const leadWebhook = process.env.ZAPIER_LEAD_WEBHOOK;
+  if (leadWebhook) {
+    const lead = {
+      first_name: payload.first_name.trim(),
+      last_name: payload.last_name.trim(),
+      company: payload.company?.trim() || "",
+      title: payload.title?.trim() || "",
+      email: payload.email.trim(),
+      phone: payload.phone?.trim() || "",
+      subscribe_northstar: !!payload.subscribe_northstar,
+      release_type: label,
+      property_name: payload.brief.property_name || "",
+      property_city: payload.brief.city || "",
+      property_state: payload.brief.state || "",
+      submitted_at: new Date().toISOString(),
+    };
+    try {
+      await fetch(leadWebhook, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(lead),
+      });
+    } catch (err) {
+      console.error("lead_webhook_failed", err);
+    }
+  }
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
