@@ -80,12 +80,12 @@ Just Sold:
 
 ## Image handling
 
-Insert a single <div class="image-slot"></div> immediately above the <h1> headline in draft_html. If image_credit is provided, insert <p class="image-credit"><em>Photo: {image_credit}</em></p> immediately after the image slot.
+Insert a single <div class="image-slot"></div> in draft_html immediately after the deck (the italic subhead line that follows the <h1>). If the draft has no deck, place it immediately after the <h1> headline. If image_credit is provided, insert <p class="image-credit"><em>Photo: {image_credit}</em></p> immediately after the image slot.
 
 Set image_placement_note based on brief.has_image and brief.image_orientation:
-- has_image + landscape: "The property image is placed above the headline at ~60% page width, centered. If you swap it in the .docx, keep it landscape and centered at 55–65% page width."
+- has_image + landscape: "The property image is placed beneath the headline at ~60% page width, centered. If you swap it in the .docx, keep it landscape and centered at 55–65% page width."
 - has_image + portrait: "The property image is portrait — placed at ~45% page width instead of 60% to avoid dominating the page. Landscape crops read better in wire copy." Also add "Portrait image auto-shrunk to 45% page width." to warnings[].
-- no image: "No image included. A placeholder is reserved above the headline — drop a landscape photo into that slot, or leave it as-is."
+- no image: "No image included. A placeholder is reserved beneath the headline — drop a landscape photo into that slot, or leave it as-is."
 - If image_credit was provided: append " Photo credit added beneath the image." to image_placement_note.
 
 ## Length

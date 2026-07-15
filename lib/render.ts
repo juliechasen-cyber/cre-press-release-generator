@@ -27,6 +27,43 @@ function landscapeWidthFraction(orientation: "landscape" | "portrait"): number {
   return orientation === "landscape" ? 0.6 : 0.45;
 }
 
+// Reads true pixel dimensions from a JPEG or PNG buffer so renders keep the
+// photo's real aspect ratio. Returns null if the header can't be parsed.
+function imageDims(
+  bytes: Buffer,
+  mime: "image/jpeg" | "image/png",
+): { w: number; h: number } | null {
+  try {
+    if (mime === "image/png") {
+      if (bytes.length < 24) return null;
+      return { w: bytes.readUInt32BE(16), h: bytes.readUInt32BE(20) };
+    }
+    let i = 2;
+    while (i < bytes.length - 9) {
+      if (bytes[i] !== 0xff) {
+        i++;
+        continue;
+      }
+      const marker = bytes[i + 1];
+      if (
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        marker !== 0xc4 &&
+        marker !== 0xc8 &&
+        marker !== 0xcc
+      ) {
+        return { h: bytes.readUInt16BE(i + 5), w: bytes.readUInt16BE(i + 7) };
+      }
+      const len = bytes.readUInt16BE(i + 2);
+      if (len < 2) return null;
+      i += 2 + len;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Parses the LLM's draft_text into structured blocks the renderer can lay out.
 // The LLM follows the wire format in the system prompt, so this parser is
 // permissive rather than strict — anything not recognized falls through as a
@@ -109,19 +146,26 @@ export async function renderDocx(
   const blocks = parseDraft(draftText);
   const children: Paragraph[] = [];
 
-  // Image slot above the headline (or placeholder)
+  // Image (or placeholder) paragraphs, inserted after the deck — or after the
+  // headline when the draft has no deck — per standard wire layout.
+  const imageChildren: Paragraph[] = [];
   if (image) {
     // docx wants EMU or pixel widths; use points × 9525 EMU/pt approximated via
     // the library's `transformation` (which takes pixel dimensions at 96 DPI).
     // Convert content width (points) → pixels at 96 DPI: pt * 96 / 72
     const contentPx = (CONTENT_W * 96) / 72;
     const targetPx = Math.round(contentPx * landscapeWidthFraction(image.orientation));
-    // Rough aspect assumption for docx sizing; PDF pass will use true bounds.
-    const aspect = image.orientation === "landscape" ? 3 / 2 : 2 / 3;
-    const heightPx = Math.round(targetPx * (image.orientation === "landscape" ? 1 / aspect : aspect));
-    children.push(
+    const dims = imageDims(image.bytes, image.mime);
+    const aspect = dims
+      ? dims.w / dims.h
+      : image.orientation === "landscape"
+        ? 3 / 2
+        : 2 / 3;
+    const heightPx = Math.round(targetPx / aspect);
+    imageChildren.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
+        spacing: { before: 120, after: 120 },
         children: [
           new ImageRun({
             data: image.bytes,
@@ -132,7 +176,7 @@ export async function renderDocx(
       }),
     );
     if (image.credit) {
-      children.push(
+      imageChildren.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
           children: [
@@ -142,9 +186,10 @@ export async function renderDocx(
       );
     }
   } else {
-    children.push(
+    imageChildren.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
+        spacing: { before: 120, after: 120 },
         children: [
           new TextRun({
             text: "[insert property image here]",
@@ -155,6 +200,15 @@ export async function renderDocx(
       }),
     );
   }
+
+  const hasDeck = blocks.some((b) => b.kind === "deck");
+  const hasHeadline = blocks.some((b) => b.kind === "headline");
+  const imageAnchor: Block["kind"] | null = hasDeck
+    ? "deck"
+    : hasHeadline
+      ? "headline"
+      : null;
+  if (!imageAnchor) children.push(...imageChildren);
 
   for (const block of blocks) {
     switch (block.kind) {
@@ -222,6 +276,7 @@ export async function renderDocx(
         );
         break;
     }
+    if (block.kind === imageAnchor) children.push(...imageChildren);
   }
 
   const doc = new Document({
@@ -254,39 +309,67 @@ export async function renderPdf(
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    // Image or placeholder
-    if (image) {
-      const width = CONTENT_W * landscapeWidthFraction(image.orientation);
-      const x = MARGIN + (CONTENT_W - width) / 2;
-      doc.image(image.bytes, x, doc.y, { width });
-      doc.moveDown(0.5);
-      if (image.credit) {
-        doc.fontSize(9).font("Helvetica-Oblique").fillColor("#666666").text(
-          `Photo: ${image.credit}`,
-          { align: "center" },
-        );
-        doc.fillColor("#000000");
+    // Draws the image (or placeholder). Called after the deck — or after the
+    // headline when the draft has no deck — per standard wire layout.
+    const drawImage = () => {
+      doc.moveDown(0.4);
+      if (image) {
+        const width = CONTENT_W * landscapeWidthFraction(image.orientation);
+        const x = MARGIN + (CONTENT_W - width) / 2;
+        const dims = imageDims(image.bytes, image.mime);
+        const aspect = dims
+          ? dims.w / dims.h
+          : image.orientation === "landscape"
+            ? 3 / 2
+            : 2 / 3;
+        const drawnH = width / aspect;
+        if (doc.y + drawnH > PAGE_H - MARGIN) doc.addPage();
+        const startY = doc.y;
+        doc.image(image.bytes, x, startY, { width });
+        // pdfkit does not advance the cursor after an explicitly positioned
+        // image — move it past the drawn height ourselves.
+        doc.y = startY + drawnH;
+        doc.moveDown(0.5);
+        if (image.credit) {
+          doc.fontSize(9).font("Helvetica-Oblique").fillColor("#666666").text(
+            `Photo: ${image.credit}`,
+            MARGIN,
+            doc.y,
+            { width: CONTENT_W, align: "center" },
+          );
+          doc.fillColor("#000000");
+        }
+        doc.moveDown(0.8);
+      } else {
+        const placeholderH = 160;
+        const placeholderW = CONTENT_W * 0.6;
+        const x = MARGIN + (CONTENT_W - placeholderW) / 2;
+        const y = doc.y;
+        doc
+          .rect(x, y, placeholderW, placeholderH)
+          .fillAndStroke("#f4f4f2", "#d6d6d0");
+        doc
+          .fillColor("#888888")
+          .font("Helvetica-Oblique")
+          .fontSize(10)
+          .text("[insert property image here]", x, y + placeholderH / 2 - 6, {
+            width: placeholderW,
+            align: "center",
+          });
+        doc.fillColor("#000000").font("Helvetica");
+        doc.y = y + placeholderH + 16;
       }
-      doc.moveDown(0.8);
-    } else {
-      const placeholderH = 160;
-      const placeholderW = CONTENT_W * 0.6;
-      const x = MARGIN + (CONTENT_W - placeholderW) / 2;
-      const y = doc.y;
-      doc
-        .rect(x, y, placeholderW, placeholderH)
-        .fillAndStroke("#f4f4f2", "#d6d6d0");
-      doc
-        .fillColor("#888888")
-        .font("Helvetica-Oblique")
-        .fontSize(10)
-        .text("[insert property image here]", x, y + placeholderH / 2 - 6, {
-          width: placeholderW,
-          align: "center",
-        });
-      doc.fillColor("#000000").font("Helvetica");
-      doc.y = y + placeholderH + 16;
-    }
+      doc.x = MARGIN;
+    };
+
+    const hasDeck = blocks.some((b) => b.kind === "deck");
+    const hasHeadline = blocks.some((b) => b.kind === "headline");
+    const imageAnchor: Block["kind"] | null = hasDeck
+      ? "deck"
+      : hasHeadline
+        ? "headline"
+        : null;
+    if (!imageAnchor) drawImage();
 
     for (const block of blocks) {
       switch (block.kind) {
@@ -332,6 +415,7 @@ export async function renderPdf(
           });
           break;
       }
+      if (block.kind === imageAnchor) drawImage();
     }
     doc.end();
   });
