@@ -3,12 +3,19 @@ import { z } from "zod";
 export const RELEASE_TYPES = ["coming-soon", "just-listed", "just-sold"] as const;
 export const PROPERTY_TYPES = [
   "office",
-  "multifamily",
   "industrial",
   "retail",
-  "mixed-use",
+  "multifamily",
   "hospitality",
+  "mixed-use",
+  "medical-office",
+  "senior-housing",
+  "student-housing",
+  "self-storage",
+  "data-centers",
+  "life-sciences",
   "land",
+  "other",
 ] as const;
 export const KEY_STAT_UNITS = ["units", "square feet", "keys", "acres"] as const;
 
@@ -16,6 +23,23 @@ export const RELEASE_TYPE_LABELS: Record<(typeof RELEASE_TYPES)[number], string>
   "coming-soon": "Coming Soon",
   "just-listed": "Just Listed",
   "just-sold": "Just Sold",
+};
+
+export const PROPERTY_TYPE_LABELS: Record<(typeof PROPERTY_TYPES)[number], string> = {
+  office: "Office",
+  industrial: "Industrial",
+  retail: "Retail",
+  multifamily: "Multifamily",
+  hospitality: "Hospitality",
+  "mixed-use": "Mixed-Use",
+  "medical-office": "Medical Office",
+  "senior-housing": "Senior Housing",
+  "student-housing": "Student Housing",
+  "self-storage": "Self Storage",
+  "data-centers": "Data Centers",
+  "life-sciences": "Life Sciences",
+  land: "Land",
+  other: "Other",
 };
 
 const nonEmpty = (max: number) =>

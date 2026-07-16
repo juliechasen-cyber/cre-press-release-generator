@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   KEY_STAT_UNITS,
   PROPERTY_TYPES,
+  PROPERTY_TYPE_LABELS,
   RELEASE_TYPES,
   RELEASE_TYPE_LABELS,
   type UserBrief,
@@ -61,12 +62,19 @@ const US_STATES = [
 
 const DEFAULT_UNIT: Record<PropertyType, KeyStatUnit> = {
   office: "square feet",
-  multifamily: "units",
   industrial: "square feet",
   retail: "square feet",
-  "mixed-use": "square feet",
+  multifamily: "units",
   hospitality: "keys",
+  "mixed-use": "square feet",
+  "medical-office": "square feet",
+  "senior-housing": "units",
+  "student-housing": "units",
+  "self-storage": "square feet",
+  "data-centers": "square feet",
+  "life-sciences": "square feet",
   land: "acres",
+  other: "square feet",
 };
 
 const INITIAL: FormState = {
@@ -456,7 +464,7 @@ export default function Generator() {
                 onChange={(e) => onPropertyTypeChange(e.target.value as PropertyType)}
               >
                 {PROPERTY_TYPES.map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                  <option key={p} value={p}>{PROPERTY_TYPE_LABELS[p]}</option>
                 ))}
               </select>
             </div>
