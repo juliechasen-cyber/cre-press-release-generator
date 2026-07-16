@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { RELEASE_TYPE_LABELS, type UserBrief } from "@/lib/schema";
 import { renderDocx, renderPdf, type ImageInput } from "@/lib/render";
+import { notifyLead } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -154,32 +155,38 @@ export async function POST(request: Request) {
     );
   }
 
+  const lead: Array<[string, unknown]> = [
+    ["submitted_at", new Date().toISOString()],
+    ["first_name", payload.first_name.trim()],
+    ["last_name", payload.last_name.trim()],
+    ["email", payload.email.trim()],
+    ["company", payload.company?.trim()],
+    ["title", payload.title?.trim()],
+    ["phone", payload.phone?.trim()],
+    ["subscribe_northstar", payload.subscribe_northstar ? "yes" : "no"],
+    ["release_type", label],
+    ["property_name", payload.brief.property_name],
+    ["property_city", payload.brief.city],
+    ["property_state", payload.brief.state],
+  ];
+
   const leadWebhook = process.env.EMAIL_WEBHOOK;
   if (leadWebhook) {
-    const lead = {
-      first_name: payload.first_name.trim(),
-      last_name: payload.last_name.trim(),
-      company: payload.company?.trim() || "",
-      title: payload.title?.trim() || "",
-      email: payload.email.trim(),
-      phone: payload.phone?.trim() || "",
-      subscribe_northstar: !!payload.subscribe_northstar,
-      release_type: label,
-      property_name: payload.brief.property_name || "",
-      property_city: payload.brief.city || "",
-      property_state: payload.brief.state || "",
-      submitted_at: new Date().toISOString(),
-    };
     try {
       await fetch(leadWebhook, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(lead),
+        body: JSON.stringify(Object.fromEntries(lead)),
       });
     } catch (err) {
       console.error("lead_webhook_failed", err);
     }
   }
+
+  await notifyLead(
+    `New CRE lead — ${payload.first_name} ${payload.last_name} (${payload.company?.trim() || "no company"})`,
+    lead,
+  );
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }

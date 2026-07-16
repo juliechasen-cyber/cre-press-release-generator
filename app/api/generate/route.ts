@@ -8,6 +8,7 @@ import {
 } from "@/lib/schema";
 import { SYSTEM_PROMPT, buildUserMessage } from "@/lib/prompt";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { notifyLead } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -143,36 +144,41 @@ export async function POST(request: Request) {
     );
   }
 
+  const lead: Array<[string, unknown]> = [
+    ["submitted_at", new Date().toISOString()],
+    ["release_type", brief.release_type],
+    ["property_name", brief.property_name],
+    ["property_address", brief.property_address],
+    ["city", brief.city],
+    ["state", brief.state],
+    ["property_type", brief.property_type],
+    ["key_stat", `${brief.key_stat_value} ${brief.key_stat_unit}`],
+    ["asking_price", brief.asking_price],
+    ["broker_name", brief.broker_name],
+    ["broker_title", brief.broker_title],
+    ["firm_name", brief.firm_name],
+    ["media_contact_name", brief.media_contact_name],
+    ["media_contact_email", brief.media_contact_email],
+    ["media_contact_phone", brief.media_contact_phone],
+  ];
+
   const generateWebhook = process.env.GENERATE_WEBHOOK;
   if (generateWebhook) {
-    const lead = {
-      submitted_at: new Date().toISOString(),
-      release_type: brief.release_type,
-      property_name: brief.property_name || "",
-      property_address: brief.property_address,
-      city: brief.city,
-      state: brief.state,
-      property_type: brief.property_type,
-      key_stat_value: brief.key_stat_value,
-      key_stat_unit: brief.key_stat_unit,
-      asking_price: brief.asking_price ?? "",
-      broker_name: brief.broker_name,
-      broker_title: brief.broker_title,
-      firm_name: brief.firm_name,
-      media_contact_name: brief.media_contact_name || "",
-      media_contact_email: brief.media_contact_email || "",
-      media_contact_phone: brief.media_contact_phone || "",
-    };
     try {
       await fetch(generateWebhook, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(lead),
+        body: JSON.stringify(Object.fromEntries(lead)),
       });
     } catch (err) {
       console.error("generate_webhook_failed", err);
     }
   }
+
+  await notifyLead(
+    `New CRE press release draft — ${brief.firm_name}`,
+    lead,
+  );
 
   return NextResponse.json(
     {
