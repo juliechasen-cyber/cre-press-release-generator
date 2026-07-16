@@ -154,7 +154,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const leadWebhook = process.env.ZAPIER_LEAD_WEBHOOK;
+  const leadWebhook = process.env.EMAIL_WEBHOOK;
   if (leadWebhook) {
     const lead = {
       first_name: payload.first_name.trim(),

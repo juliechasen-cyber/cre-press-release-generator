@@ -143,6 +143,37 @@ export async function POST(request: Request) {
     );
   }
 
+  const generateWebhook = process.env.GENERATE_WEBHOOK;
+  if (generateWebhook) {
+    const lead = {
+      submitted_at: new Date().toISOString(),
+      release_type: brief.release_type,
+      property_name: brief.property_name || "",
+      property_address: brief.property_address,
+      city: brief.city,
+      state: brief.state,
+      property_type: brief.property_type,
+      key_stat_value: brief.key_stat_value,
+      key_stat_unit: brief.key_stat_unit,
+      asking_price: brief.asking_price ?? "",
+      broker_name: brief.broker_name,
+      broker_title: brief.broker_title,
+      firm_name: brief.firm_name,
+      media_contact_name: brief.media_contact_name || "",
+      media_contact_email: brief.media_contact_email || "",
+      media_contact_phone: brief.media_contact_phone || "",
+    };
+    try {
+      await fetch(generateWebhook, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(lead),
+      });
+    } catch (err) {
+      console.error("generate_webhook_failed", err);
+    }
+  }
+
   return NextResponse.json(
     {
       ...parsedOutput,
