@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import {
   GeneratorOutputJsonSchema,
   GeneratorOutputSchema,
@@ -15,7 +15,36 @@ export const maxDuration = 60;
 
 const client = new Anthropic();
 
+// The tool is embedded on Julie's portfolio site, which is a different origin,
+// so that page's fetch needs an explicit allow. Everything else is same-origin
+// and unaffected.
+const ALLOWED_ORIGINS = new Set([
+  "https://juliechasen.com",
+  "https://www.juliechasen.com",
+]);
+
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get("origin") || "";
+  if (!ALLOWED_ORIGINS.has(origin)) return {};
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    vary: "Origin",
+  };
+}
+
+export async function OPTIONS(request: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(request) });
+}
+
 export async function POST(request: Request) {
+  const res = await handleGenerate(request);
+  for (const [k, v] of Object.entries(corsHeaders(request))) res.headers.set(k, v);
+  return res;
+}
+
+async function handleGenerate(request: Request): Promise<NextResponse> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
       {
@@ -66,6 +95,17 @@ export async function POST(request: Request) {
   }
   const brief = parsed.data;
 
+  // The contact_* fields are lead capture, not release facts — keep them out
+  // of the prompt so the model can't mistake them for a media contact.
+  const {
+    contact_first_name,
+    contact_last_name,
+    contact_title,
+    contact_company,
+    contact_email,
+    ...releaseBrief
+  } = brief;
+
   let response;
   try {
     response = await client.messages.create({
@@ -77,7 +117,7 @@ export async function POST(request: Request) {
       thinking: { type: "disabled" },
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserMessage(brief) }],
+      messages: [{ role: "user", content: buildUserMessage(releaseBrief) }],
       output_config: {
         format: {
           type: "json_schema",
@@ -146,6 +186,11 @@ export async function POST(request: Request) {
 
   const lead: Array<[string, unknown]> = [
     ["submitted_at", new Date().toISOString()],
+    ["first_name", contact_first_name],
+    ["last_name", contact_last_name],
+    ["title", contact_title],
+    ["company", contact_company],
+    ["email", contact_email],
     ["release_type", brief.release_type],
     ["property_name", brief.property_name],
     ["property_address", brief.property_address],
@@ -162,23 +207,26 @@ export async function POST(request: Request) {
     ["media_contact_phone", brief.media_contact_phone],
   ];
 
-  const generateWebhook = process.env.GENERATE_WEBHOOK;
-  if (generateWebhook) {
-    try {
-      await fetch(generateWebhook, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(lead)),
-      });
-    } catch (err) {
-      console.error("generate_webhook_failed", err);
+  // Lead capture runs after the response is sent — the user shouldn't wait
+  // on webhook/email round-trips to see their draft.
+  after(async () => {
+    const generateWebhook = process.env.GENERATE_WEBHOOK;
+    if (generateWebhook) {
+      try {
+        await fetch(generateWebhook, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(lead)),
+        });
+      } catch (err) {
+        console.error("generate_webhook_failed", err);
+      }
     }
-  }
-
-  await notifyLead(
-    `New CRE press release draft — ${brief.firm_name}`,
-    lead,
-  );
+    await notifyLead(
+      `New CRE draft — ${contact_first_name} ${contact_last_name} (${contact_company})`,
+      lead,
+    );
+  });
 
   return NextResponse.json(
     {

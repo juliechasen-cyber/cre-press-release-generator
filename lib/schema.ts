@@ -51,6 +51,13 @@ const nonEmpty = (max: number) =>
 
 export const UserBriefSchema = z
   .object({
+    // Step 0 — who is using the tool (lead capture; never sent to the LLM)
+    contact_first_name: nonEmpty(80),
+    contact_last_name: nonEmpty(80),
+    contact_title: nonEmpty(120),
+    contact_company: nonEmpty(120),
+    contact_email: z.string().trim().email().max(200),
+
     release_type: z.enum(RELEASE_TYPES),
 
     // Step 1 — property
@@ -112,11 +119,6 @@ export const UserBriefSchema = z
     secondary_quote_text: z.string().trim().max(600).optional().or(z.literal("").transform(() => undefined)),
     secondary_quote_angle_hint: nonEmpty(200).optional().or(z.literal("").transform(() => undefined)),
 
-    // Step 5 — image
-    image_credit: nonEmpty(120).optional().or(z.literal("").transform(() => undefined)),
-    // Image bytes come via multipart, not in this JSON — see form-spec.md
-    has_image: z.boolean().optional(),
-    image_orientation: z.enum(["landscape", "portrait"]).optional(),
   })
   .superRefine((val, ctx) => {
     if (val.release_type === "coming-soon" && !val.distinguishing_fact) {

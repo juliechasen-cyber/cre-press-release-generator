@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KEY_STAT_UNITS,
   PROPERTY_TYPES,
@@ -24,6 +24,11 @@ type GenerateResponse = {
 
 // Anything the form binds — kept string-friendly so inputs stay controlled.
 type FormState = {
+  contact_first_name: string;
+  contact_last_name: string;
+  contact_title: string;
+  contact_company: string;
+  contact_email: string;
   release_type: ReleaseType;
   property_name: string;
   property_address: string;
@@ -53,7 +58,6 @@ type FormState = {
   secondary_quote_affiliation: string;
   secondary_quote_text: string;
   secondary_quote_angle_hint: string;
-  image_credit: string;
 };
 
 const US_STATES = [
@@ -77,7 +81,52 @@ const DEFAULT_UNIT: Record<PropertyType, KeyStatUnit> = {
   other: "square feet",
 };
 
-const INITIAL: FormState = {
+// A complete sample deal — the same one the scoping mockup shipped with. The
+// form opens pre-filled with it so a first-time broker can see what good input
+// looks like, and "Clear all fields" empties it. "About you" is excluded: it is
+// the lead-capture block and has to be the broker's own details.
+const EXAMPLE: Omit<
+  FormState,
+  "contact_first_name" | "contact_last_name" | "contact_title" | "contact_company" | "contact_email"
+> = {
+  release_type: "just-listed",
+  property_name: "The Brigantine",
+  property_address: "2450 Fourth Avenue",
+  city: "San Diego",
+  state: "CA",
+  property_type: "multifamily",
+  key_stat_value: "48",
+  key_stat_unit: "units",
+  year_built: "2019",
+  distinguishing_fact:
+    "First institutional-quality multifamily asset to hit the Bankers Hill submarket since 2019.",
+  asking_price: "10900000",
+  price_visible_in_release: true,
+  buyer_name: "",
+  seller_name: "",
+  closing_date: "",
+  broker_name: "Jordan Rivera",
+  broker_title: "Senior Managing Director",
+  firm_name: "Rivera Commercial Advisors",
+  firm_boilerplate:
+    "Rivera Commercial Advisors is a San Diego-based brokerage focused exclusively on multifamily investment sales across Southern California. The firm has closed more than $2.4 billion in transactions since 2011.",
+  media_contact_name: "",
+  media_contact_email: "press@riveracommercial.com",
+  media_contact_phone: "(619) 555-0142",
+  draft_quote: "",
+  quote_angle_hint:
+    "Emphasize the scarcity of institutional-quality product in Bankers Hill.",
+  secondary_quote_name: "",
+  secondary_quote_title: "",
+  secondary_quote_affiliation: "",
+  secondary_quote_text: "",
+  secondary_quote_angle_hint: "",
+};
+
+const BLANK_DEAL: Omit<
+  FormState,
+  "contact_first_name" | "contact_last_name" | "contact_title" | "contact_company" | "contact_email"
+> = {
   release_type: "just-listed",
   property_name: "",
   property_address: "",
@@ -107,8 +156,17 @@ const INITIAL: FormState = {
   secondary_quote_affiliation: "",
   secondary_quote_text: "",
   secondary_quote_angle_hint: "",
-  image_credit: "",
 };
+
+const INITIAL: FormState = {
+  contact_first_name: "",
+  contact_last_name: "",
+  contact_title: "",
+  contact_company: "",
+  contact_email: "",
+  ...EXAMPLE,
+};
+
 
 function slugify(s: string): string {
   return s
@@ -120,8 +178,7 @@ function slugify(s: string): string {
 
 export default function Generator() {
   const [state, setState] = useState<FormState>(INITIAL);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageOrientation, setImageOrientation] = useState<"landscape" | "portrait">("landscape");
+  const previewRef = useRef<HTMLElement>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
@@ -153,32 +210,32 @@ export default function Generator() {
     });
   };
 
+  // The form opens on the sample deal, so the link empties it; once empty it
+  // offers the sample back. Either way "About you" is left alone — that's the
+  // lead capture and has to stay the broker's own details.
+  const [showingExample, setShowingExample] = useState(true);
+  const toggleExample = () => {
+    setState((s) => ({ ...s, ...(showingExample ? BLANK_DEAL : EXAMPLE) }));
+    setErrors({});
+    setShowingExample((v) => !v);
+  };
+
   const onPropertyTypeChange = (v: PropertyType) => {
     set("property_type", v);
     // Pre-select the most likely unit
     setState((s) => ({ ...s, property_type: v, key_stat_unit: DEFAULT_UNIT[v] }));
   };
 
-  const onImagePick = async (file: File | null) => {
-    setImageFile(file);
-    if (!file) return;
-    // Detect orientation client-side
-    try {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        setImageOrientation(img.naturalWidth >= img.naturalHeight ? "landscape" : "portrait");
-        URL.revokeObjectURL(url);
-      };
-      img.onerror = () => URL.revokeObjectURL(url);
-      img.src = url;
-    } catch {
-      // Fall back to landscape
-    }
-  };
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
+    if (!state.contact_first_name.trim()) e.contact_first_name = "Required.";
+    if (!state.contact_last_name.trim()) e.contact_last_name = "Required.";
+    if (!state.contact_title.trim()) e.contact_title = "Required.";
+    if (!state.contact_company.trim()) e.contact_company = "Required.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.contact_email.trim())) {
+      e.contact_email = "Enter a valid email address.";
+    }
     if (!state.property_address.trim()) e.property_address = "Required.";
     if (!state.city.trim()) e.city = "Required.";
     if (!state.state.trim()) e.state = "Required.";
@@ -196,9 +253,6 @@ export default function Generator() {
     }
     if (state.media_contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.media_contact_email)) {
       e.media_contact_email = "Invalid email address.";
-    }
-    if (imageFile && imageFile.size > 10 * 1024 * 1024) {
-      e.image = "Image must be under 10 MB.";
     }
     const anySecondary =
       state.secondary_quote_title.trim() ||
@@ -219,6 +273,11 @@ export default function Generator() {
 
   const buildBrief = (): Record<string, unknown> => {
     const brief: Record<string, unknown> = {
+      contact_first_name: state.contact_first_name.trim(),
+      contact_last_name: state.contact_last_name.trim(),
+      contact_title: state.contact_title.trim(),
+      contact_company: state.contact_company.trim(),
+      contact_email: state.contact_email.trim(),
       release_type: state.release_type,
       property_name: state.property_name.trim() || undefined,
       property_address: state.property_address.trim(),
@@ -243,9 +302,6 @@ export default function Generator() {
       secondary_quote_affiliation: state.secondary_quote_affiliation.trim() || undefined,
       secondary_quote_text: state.secondary_quote_text.trim() || undefined,
       secondary_quote_angle_hint: state.secondary_quote_angle_hint.trim() || undefined,
-      image_credit: state.image_credit.trim() || undefined,
-      has_image: !!imageFile,
-      image_orientation: imageFile ? imageOrientation : undefined,
     };
     if (isComingSoon) {
       brief.price_visible_in_release = state.price_visible_in_release;
@@ -304,15 +360,35 @@ export default function Generator() {
     return slugify(b.property_name || b.property_address || "cre-press-release");
   }, [result]);
 
-  const download = async (format: "docx" | "pdf") => {
+  // The draft reserves an empty image slot beneath the deck — the same one the
+  // .docx gets — so the broker can drop their own photo in afterwards. The LLM
+  // is told to emit it, but fall back to inserting one if it forgets.
+  const previewHtml = useMemo(() => {
+    if (!result) return "";
+    if (/<div class="image-slot">\s*<\/div>/i.test(result.draft_html)) {
+      return result.draft_html;
+    }
+    const slot = '<div class="image-slot"></div>';
+    const afterH1 = result.draft_html.indexOf("</h1>");
+    if (afterH1 !== -1) {
+      const cut = afterH1 + "</h1>".length;
+      return result.draft_html.slice(0, cut) + slot + result.draft_html.slice(cut);
+    }
+    return slot + result.draft_html;
+  }, [result]);
+
+  // Bring the finished draft into view — on stacked/mobile layouts the
+  // preview panel sits below the fold when Generate is clicked.
+  useEffect(() => {
+    if (result) previewRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [result]);
+
+  const download = async () => {
     if (!result) return;
     const fd = new FormData();
     fd.set("draft_text", result.draft_text);
-    fd.set("format", format);
+    fd.set("format", "docx");
     fd.set("slug", slug);
-    fd.set("image_orientation", imageOrientation);
-    if (state.image_credit.trim()) fd.set("image_credit", state.image_credit.trim());
-    if (imageFile) fd.set("image", imageFile);
     const res = await fetch("/api/render", { method: "POST", body: fd });
     if (!res.ok) {
       setFlash("Download failed. Please try again.");
@@ -322,7 +398,7 @@ export default function Generator() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `cre-press-release-${slug}.${format}`;
+    a.download = `cre-press-release-${slug}.docx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -364,8 +440,7 @@ export default function Generator() {
           slug,
         }),
       );
-      if (imageFile) fd.set("image", imageFile);
-      const res = await fetch("/api/send-email", { method: "POST", body: fd });
+        const res = await fetch("/api/send-email", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) {
         setFlash(json.message || "Email failed. Please try again.");
@@ -383,8 +458,90 @@ export default function Generator() {
       <section className="form-panel">
         <h2>Your deal</h2>
         <p className="section-note">
-          Fill in the basics. You&apos;ll get a draft in about a minute.
+          The deal fields below are filled in with an example so you can see what
+          goes where — type over them with your own.{" "}
+          <button type="button" className="link-btn" onClick={toggleExample}>
+            {showingExample ? "Clear all fields" : "Put the example back"}
+          </button>
+          .
         </p>
+
+        <fieldset>
+          <legend>About you</legend>
+          <p className="section-note" style={{ margin: "-4px 0 12px" }}>
+            So we know who the draft is for. This does not appear in the
+            release itself.
+          </p>
+          <div className="row-2">
+            <div className="field">
+              <label>First name</label>
+              <input
+                type="text"
+                value={state.contact_first_name}
+                maxLength={80}
+                onChange={(e) => set("contact_first_name", e.target.value)}
+                placeholder="e.g. Jordan"
+              />
+              {errors.contact_first_name && (
+                <div className="error">{errors.contact_first_name}</div>
+              )}
+            </div>
+            <div className="field">
+              <label>Last name</label>
+              <input
+                type="text"
+                value={state.contact_last_name}
+                maxLength={80}
+                onChange={(e) => set("contact_last_name", e.target.value)}
+                placeholder="e.g. Rivera"
+              />
+              {errors.contact_last_name && (
+                <div className="error">{errors.contact_last_name}</div>
+              )}
+            </div>
+          </div>
+          <div className="row-2">
+            <div className="field">
+              <label>Title</label>
+              <input
+                type="text"
+                value={state.contact_title}
+                maxLength={120}
+                onChange={(e) => set("contact_title", e.target.value)}
+                placeholder="e.g. Senior Vice President"
+              />
+              {errors.contact_title && (
+                <div className="error">{errors.contact_title}</div>
+              )}
+            </div>
+            <div className="field">
+              <label>Company</label>
+              <input
+                type="text"
+                value={state.contact_company}
+                maxLength={120}
+                onChange={(e) => set("contact_company", e.target.value)}
+                placeholder="e.g. Rivera Commercial Advisors"
+              />
+              {errors.contact_company && (
+                <div className="error">{errors.contact_company}</div>
+              )}
+            </div>
+          </div>
+          <div className="field">
+            <label>Work email</label>
+            <input
+              type="email"
+              value={state.contact_email}
+              maxLength={200}
+              onChange={(e) => set("contact_email", e.target.value)}
+              placeholder="you@brokerage.com"
+            />
+            {errors.contact_email && (
+              <div className="error">{errors.contact_email}</div>
+            )}
+          </div>
+        </fieldset>
 
         <fieldset>
           <legend>Release type</legend>
@@ -422,6 +579,7 @@ export default function Generator() {
               type="text"
               value={state.property_address}
               onChange={(e) => set("property_address", e.target.value)}
+              placeholder="e.g. 123 Ocean Boulevard"
             />
             {errors.property_address && <div className="error">{errors.property_address}</div>}
           </div>
@@ -432,6 +590,7 @@ export default function Generator() {
                 type="text"
                 value={state.city}
                 onChange={(e) => set("city", e.target.value)}
+                placeholder="e.g. San Diego"
               />
               {errors.city && <div className="error">{errors.city}</div>}
             </div>
@@ -453,6 +612,7 @@ export default function Generator() {
                 onChange={(e) => set("year_built", e.target.value)}
                 min={1700}
                 max={new Date().getFullYear() + 5}
+                placeholder="e.g. 1998"
               />
             </div>
           </div>
@@ -500,7 +660,7 @@ export default function Generator() {
               value={state.distinguishing_fact}
               onChange={(e) => set("distinguishing_fact", e.target.value)}
               maxLength={300}
-              placeholder="One sentence answering: why is this news?"
+              placeholder="e.g. First institutional-quality multifamily asset to hit the Bankers Hill submarket since 2019."
             />
             {errors.distinguishing_fact && (
               <div className="error">{errors.distinguishing_fact}</div>
@@ -547,6 +707,7 @@ export default function Generator() {
                     value={state.asking_price}
                     onChange={(e) => set("asking_price", e.target.value)}
                     min={1}
+                    placeholder="e.g. 10900000"
                   />
                 </div>
               )}
@@ -561,6 +722,7 @@ export default function Generator() {
                     type="text"
                     value={state.buyer_name}
                     onChange={(e) => set("buyer_name", e.target.value)}
+                    placeholder="e.g. Coastal Equity Partners"
                   />
                 </div>
                 <div className="field">
@@ -569,6 +731,7 @@ export default function Generator() {
                     type="text"
                     value={state.seller_name}
                     onChange={(e) => set("seller_name", e.target.value)}
+                    placeholder="e.g. Blue Harbor Holdings"
                   />
                 </div>
               </div>
@@ -593,6 +756,7 @@ export default function Generator() {
                 type="text"
                 value={state.broker_name}
                 onChange={(e) => set("broker_name", e.target.value)}
+                placeholder="e.g. Jordan Rivera"
               />
               {errors.broker_name && <div className="error">{errors.broker_name}</div>}
             </div>
@@ -613,6 +777,7 @@ export default function Generator() {
               type="text"
               value={state.firm_name}
               onChange={(e) => set("firm_name", e.target.value)}
+              placeholder="e.g. Rivera Commercial Advisors"
             />
             {errors.firm_name && <div className="error">{errors.firm_name}</div>}
           </div>
@@ -622,7 +787,7 @@ export default function Generator() {
               value={state.firm_boilerplate}
               onChange={(e) => set("firm_boilerplate", e.target.value)}
               maxLength={800}
-              placeholder="2–4 sentences. If blank, we'll leave a [FIRM BOILERPLATE] slot."
+              placeholder="e.g. Rivera Commercial Advisors is a San Diego-based brokerage focused exclusively on multifamily investment sales across Southern California. The firm has closed more than $2.4 billion in transactions since 2011. — 2–4 sentences. If blank, we'll leave a [FIRM BOILERPLATE] slot."
             />
           </div>
           <div className="row-3">
@@ -632,6 +797,7 @@ export default function Generator() {
                 type="text"
                 value={state.media_contact_name}
                 onChange={(e) => set("media_contact_name", e.target.value)}
+                placeholder="e.g. Jordan Rivera"
               />
             </div>
             <div className="field">
@@ -640,6 +806,7 @@ export default function Generator() {
                 type="email"
                 value={state.media_contact_email}
                 onChange={(e) => set("media_contact_email", e.target.value)}
+                placeholder="e.g. press@riveracommercial.com"
               />
               {errors.media_contact_email && (
                 <div className="error">{errors.media_contact_email}</div>
@@ -651,6 +818,7 @@ export default function Generator() {
                 type="tel"
                 value={state.media_contact_phone}
                 onChange={(e) => set("media_contact_phone", e.target.value)}
+                placeholder="e.g. (619) 555-0142"
               />
             </div>
           </div>
@@ -664,7 +832,7 @@ export default function Generator() {
               value={state.draft_quote}
               onChange={(e) => set("draft_quote", e.target.value)}
               maxLength={600}
-              placeholder="If blank, we'll generate a [DRAFT QUOTE — approve or edit]."
+              placeholder={'e.g. "Assets of this quality rarely trade in Bankers Hill, and we expect strong interest from both regional and institutional buyers." — if blank, we\'ll generate a [DRAFT QUOTE — approve or edit].'}
             />
           </div>
           <div className="field">
@@ -673,7 +841,7 @@ export default function Generator() {
               type="text"
               value={state.quote_angle_hint}
               onChange={(e) => set("quote_angle_hint", e.target.value)}
-              placeholder='e.g. "emphasize the 1031 exchange window"'
+              placeholder='e.g. "emphasize the scarcity of institutional-quality product in this submarket"'
             />
           </div>
         </fieldset>
@@ -746,37 +914,12 @@ export default function Generator() {
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>Image (optional)</legend>
-          <div className="field">
-            <label>Property image (JPEG or PNG, ≤10 MB)</label>
-            <input
-              type="file"
-              accept="image/jpeg,image/png"
-              onChange={(e) => onImagePick(e.target.files?.[0] || null)}
-            />
-            {errors.image && <div className="error">{errors.image}</div>}
-            {imageFile && (
-              <div className="hint">
-                {imageFile.name} · detected: {imageOrientation}
-              </div>
-            )}
-          </div>
-          {imageFile && (
-            <div className="field">
-              <label>Photo credit (optional)</label>
-              <input
-                type="text"
-                value={state.image_credit}
-                onChange={(e) => set("image_credit", e.target.value)}
-              />
-            </div>
-          )}
-          <div className="privacy">
-            Your image and text are used only to generate this draft. We do not
-            store them after your session ends. We do not sell your data.
-          </div>
-        </fieldset>
+        <div className="privacy">
+          Your deal details are used only to generate this draft — we do not keep
+          them after your session ends. Your contact info (name, title, company,
+          email) is kept so we know who is using the tool. We never sell your
+          data.
+        </div>
 
         <div className="actions">
           <button className="btn" onClick={onGenerate} disabled={busy}>
@@ -786,10 +929,10 @@ export default function Generator() {
         </div>
       </section>
 
-      <aside className="preview-panel">
+      <aside className="preview-panel" ref={previewRef}>
         <h2>Draft preview</h2>
         <p className="section-note">
-          Copy, download as .docx / .pdf, or email it to yourself. All four
+          Copy it, download the .docx, or email it to yourself. All three
           actions are available without an email address.
         </p>
         {!result && (
@@ -807,12 +950,25 @@ export default function Generator() {
             <div className="warning" style={{ background: "var(--accent-soft)", color: "var(--accent)", borderColor: "#cfdaea" }}>
               <strong>Image placement:</strong> {result.image_placement_note}
             </div>
-            <div className="preview-box" dangerouslySetInnerHTML={{ __html: result.draft_html }} />
+            <div className="preview-box" dangerouslySetInnerHTML={{ __html: previewHtml }} />
             <div className="actions">
               <button className="btn secondary" onClick={copyText}>Copy text</button>
-              <button className="btn secondary" onClick={() => download("docx")}>Download .docx</button>
-              <button className="btn secondary" onClick={() => download("pdf")}>Download .pdf</button>
-              <button className="btn" onClick={() => setShowEmail((v) => !v)}>
+              <button className="btn secondary" onClick={download}>Download .docx</button>
+              <button
+                className="btn"
+                onClick={() => {
+                  // Prefill from About-you so nobody types their info twice.
+                  setEmailForm((s) => ({
+                    ...s,
+                    first_name: s.first_name || state.contact_first_name,
+                    last_name: s.last_name || state.contact_last_name,
+                    company: s.company || state.contact_company,
+                    title: s.title || state.contact_title,
+                    email: s.email || state.contact_email,
+                  }));
+                  setShowEmail((v) => !v);
+                }}
+              >
                 {showEmail ? "Never mind" : "Email it to me"}
               </button>
             </div>
@@ -827,7 +983,7 @@ export default function Generator() {
               <div className="email-card">
                 <h3>Send this draft to your inbox</h3>
                 <div className="section-note">
-                  We&apos;ll email you the .docx and .pdf so you have them for later.
+                  We&apos;ll email you the .docx so you have it for later.
                 </div>
                 <div className="row-2">
                   <div className="field">

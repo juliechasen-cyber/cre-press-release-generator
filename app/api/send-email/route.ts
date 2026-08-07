@@ -1,13 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { Resend } from "resend";
 import { RELEASE_TYPE_LABELS, type UserBrief } from "@/lib/schema";
-import { renderDocx, renderPdf, type ImageInput } from "@/lib/render";
+import { renderDocx } from "@/lib/render";
 import { notifyLead } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 type SendPayload = {
   first_name: string;
@@ -73,40 +72,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // Optional image passthrough for compositing into the attachments
-  const imageFile = form.get("image");
-  let image: ImageInput = null;
-  if (imageFile && imageFile instanceof File && imageFile.size > 0) {
-    if (imageFile.size > MAX_IMAGE_BYTES) {
-      return NextResponse.json(
-        { error: "image_too_large", message: "Image exceeds 10 MB." },
-        { status: 413 },
-      );
-    }
-    const mime = imageFile.type;
-    if (mime !== "image/jpeg" && mime !== "image/png") {
-      return NextResponse.json(
-        { error: "bad_image_type", message: "Only JPEG or PNG." },
-        { status: 415 },
-      );
-    }
-    image = {
-      bytes: Buffer.from(await imageFile.arrayBuffer()),
-      mime,
-      orientation: payload.brief.image_orientation ?? "landscape",
-      credit: payload.brief.image_credit,
-    };
-  }
-
   const slug =
     (payload.slug || slugify(payload.brief.property_name || payload.brief.property_address)) ||
     "cre-press-release";
   const label = RELEASE_TYPE_LABELS[payload.brief.release_type];
 
-  const [docx, pdf] = await Promise.all([
-    renderDocx(payload.draft_text, image),
-    renderPdf(payload.draft_text, image),
-  ]);
+  const docx = await renderDocx(payload.draft_text, null);
 
   const resend = new Resend(apiKey);
 
@@ -114,10 +85,9 @@ export async function POST(request: Request) {
   const body =
     `${greeting}\n\n` +
     `Here's the draft you generated on the CRE Press Release Generator. ` +
-    `Both formats are attached — .docx for editing, .pdf for sending as-is.\n\n` +
+    `It's attached as a .docx so you can edit it in Word or Google Docs.\n\n` +
     `Attached:\n` +
-    `  • cre-press-release-${slug}.docx\n` +
-    `  • cre-press-release-${slug}.pdf\n\n` +
+    `  • cre-press-release-${slug}.docx\n\n` +
     `A few reminders before you publish:\n` +
     `  • Fill in any [BRACKETED SLOTS] we left as placeholders\n` +
     `  • Have the broker approve or rewrite the [DRAFT QUOTE] line\n` +
@@ -138,10 +108,6 @@ export async function POST(request: Request) {
         {
           filename: `cre-press-release-${slug}.docx`,
           content: docx,
-        },
-        {
-          filename: `cre-press-release-${slug}.pdf`,
-          content: pdf,
         },
       ],
     });
@@ -170,23 +136,26 @@ export async function POST(request: Request) {
     ["property_state", payload.brief.state],
   ];
 
-  const leadWebhook = process.env.EMAIL_WEBHOOK;
-  if (leadWebhook) {
-    try {
-      await fetch(leadWebhook, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(lead)),
-      });
-    } catch (err) {
-      console.error("lead_webhook_failed", err);
+  // Lead capture runs after the response is sent — the user shouldn't wait
+  // on webhook/email round-trips for the confirmation.
+  after(async () => {
+    const leadWebhook = process.env.EMAIL_WEBHOOK;
+    if (leadWebhook) {
+      try {
+        await fetch(leadWebhook, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(lead)),
+        });
+      } catch (err) {
+        console.error("lead_webhook_failed", err);
+      }
     }
-  }
-
-  await notifyLead(
-    `New CRE lead — ${payload.first_name} ${payload.last_name} (${payload.company?.trim() || "no company"})`,
-    lead,
-  );
+    await notifyLead(
+      `New CRE lead — ${payload.first_name} ${payload.last_name} (${payload.company?.trim() || "no company"})`,
+      lead,
+    );
+  });
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }

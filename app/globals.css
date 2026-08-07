@@ -100,6 +100,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--focus); out
   padding: 10px 12px; margin: 12px 0; font-size: 13px;
 }
 
+.link-btn {
+  background: none; border: none; padding: 0;
+  font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline;
+}
+
 .preview-box {
   background: #fdfcf9; border: 1px solid var(--line);
   padding: 20px; border-radius: var(--radius);
@@ -110,11 +115,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--focus); out
 .preview-box em { font-style: italic; }
 .preview-box .image-slot {
   background: #f4f4f2; border: 1px dashed var(--line-strong);
-  padding: 40px 10px; text-align: center; margin-bottom: 12px;
+  padding: 48px 16px; text-align: center; margin-bottom: 12px;
   color: var(--ink-muted); font-family: var(--sans); font-size: 13px;
   border-radius: var(--radius);
 }
-.preview-box .image-slot::before { content: "[insert property image here]"; }
+.preview-box .image-slot::before { content: "[ Property photo goes here — drop your own image into this slot in the .docx ]"; }
 
 .preview-placeholder {
   padding: 40px 20px; text-align: center; color: var(--ink-muted);

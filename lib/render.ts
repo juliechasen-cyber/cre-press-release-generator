@@ -8,7 +8,6 @@ import {
   Paragraph,
   TextRun,
 } from "docx";
-import PDFDocument from "pdfkit";
 
 export type ImageInput = {
   bytes: Buffer;
@@ -19,7 +18,6 @@ export type ImageInput = {
 
 // US Letter, 1" margins, in points (72 pt = 1")
 const PAGE_W = 612;
-const PAGE_H = 792;
 const MARGIN = 72;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 
@@ -192,7 +190,7 @@ export async function renderDocx(
         spacing: { before: 120, after: 120 },
         children: [
           new TextRun({
-            text: "[insert property image here]",
+            text: "[ INSERT PROPERTY PHOTO HERE ]",
             italics: true,
             color: "888888",
           }),
@@ -294,129 +292,4 @@ export async function renderDocx(
   });
 
   return Packer.toBuffer(doc);
-}
-
-export async function renderPdf(
-  draftText: string,
-  image: ImageInput,
-): Promise<Buffer> {
-  const blocks = parseDraft(draftText);
-
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "LETTER", margin: MARGIN });
-    const chunks: Buffer[] = [];
-    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-
-    // Draws the image (or placeholder). Called after the deck — or after the
-    // headline when the draft has no deck — per standard wire layout.
-    const drawImage = () => {
-      doc.moveDown(0.4);
-      if (image) {
-        const width = CONTENT_W * landscapeWidthFraction(image.orientation);
-        const x = MARGIN + (CONTENT_W - width) / 2;
-        const dims = imageDims(image.bytes, image.mime);
-        const aspect = dims
-          ? dims.w / dims.h
-          : image.orientation === "landscape"
-            ? 3 / 2
-            : 2 / 3;
-        const drawnH = width / aspect;
-        if (doc.y + drawnH > PAGE_H - MARGIN) doc.addPage();
-        const startY = doc.y;
-        doc.image(image.bytes, x, startY, { width });
-        // pdfkit does not advance the cursor after an explicitly positioned
-        // image — move it past the drawn height ourselves.
-        doc.y = startY + drawnH;
-        doc.moveDown(0.5);
-        if (image.credit) {
-          doc.fontSize(9).font("Helvetica-Oblique").fillColor("#666666").text(
-            `Photo: ${image.credit}`,
-            MARGIN,
-            doc.y,
-            { width: CONTENT_W, align: "center" },
-          );
-          doc.fillColor("#000000");
-        }
-        doc.moveDown(0.8);
-      } else {
-        const placeholderH = 160;
-        const placeholderW = CONTENT_W * 0.6;
-        const x = MARGIN + (CONTENT_W - placeholderW) / 2;
-        const y = doc.y;
-        doc
-          .rect(x, y, placeholderW, placeholderH)
-          .fillAndStroke("#f4f4f2", "#d6d6d0");
-        doc
-          .fillColor("#888888")
-          .font("Helvetica-Oblique")
-          .fontSize(10)
-          .text("[insert property image here]", x, y + placeholderH / 2 - 6, {
-            width: placeholderW,
-            align: "center",
-          });
-        doc.fillColor("#000000").font("Helvetica");
-        doc.y = y + placeholderH + 16;
-      }
-      doc.x = MARGIN;
-    };
-
-    const hasDeck = blocks.some((b) => b.kind === "deck");
-    const hasHeadline = blocks.some((b) => b.kind === "headline");
-    const imageAnchor: Block["kind"] | null = hasDeck
-      ? "deck"
-      : hasHeadline
-        ? "headline"
-        : null;
-    if (!imageAnchor) drawImage();
-
-    for (const block of blocks) {
-      switch (block.kind) {
-        case "for-release":
-          doc.font("Helvetica-Bold").fontSize(10).text("FOR IMMEDIATE RELEASE", {
-            align: "center",
-          });
-          doc.moveDown(0.5);
-          break;
-        case "headline":
-          doc.font("Helvetica-Bold").fontSize(16).text(block.text, { align: "center" });
-          doc.moveDown(0.3);
-          break;
-        case "deck":
-          doc
-            .font("Helvetica-Oblique")
-            .fontSize(11)
-            .text(block.text, { align: "center" });
-          doc.moveDown(0.8);
-          break;
-        case "boilerplate-header":
-          doc.moveDown(0.5);
-          doc.font("Helvetica-Bold").fontSize(11).text(block.text);
-          doc.moveDown(0.3);
-          break;
-        case "end-marker":
-          doc.moveDown(0.5);
-          doc.font("Helvetica").fontSize(11).text("##", { align: "center" });
-          doc.moveDown(0.5);
-          break;
-        case "footer":
-          doc
-            .font("Helvetica-Oblique")
-            .fontSize(9)
-            .fillColor("#666666")
-            .text("Powered by CRE Northstar", { align: "center" });
-          doc.fillColor("#000000");
-          break;
-        case "paragraph":
-          doc.font("Helvetica").fontSize(11).text(block.text, {
-            align: "left",
-            paragraphGap: 6,
-          });
-          break;
-      }
-      if (block.kind === imageAnchor) drawImage();
-    }
-    doc.end();
-  });
 }
