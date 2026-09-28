@@ -5,6 +5,10 @@ Next.js app that turns a short broker form into a wire-format press release, a
 
 Free for end users. Rate-limited to 5 drafts per IP per 24 hours to control LLM cost.
 
+**[Try it live →](https://cre-press-release-generator.vercel.app)**
+
+![CRE Press Release Generator form and draft preview](.github/screenshot.png)
+
 ## Stack
 
 - **Next.js 15** (App Router) on Node.js
