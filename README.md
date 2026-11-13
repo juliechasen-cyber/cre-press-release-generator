@@ -1,4 +1,12 @@
+---
+noteId: "8a772980df7c11f194aac7a141a2ef84"
+tags: []
+
+---
+
 # CRE Press Release Generator — v0.1
+
+By [Julie Chasen](https://juliechasen.com) — portfolio at [juliechasen.com](https://juliechasen.com).
 
 Next.js app that turns a short broker form into a wire-format press release, a
 `.docx`, and an optional "email it to me" delivery.
