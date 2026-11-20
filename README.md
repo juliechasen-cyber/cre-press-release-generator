@@ -11,7 +11,7 @@ By [Julie Chasen](https://juliechasen.com) — see more work at [juliechasen.com
 Next.js app that turns a short broker form into a wire-format press release, a
 `.docx`, and an optional "email it to me" delivery.
 
-Free for end users. Rate-limited to 5 drafts per IP per 24 hours to control LLM cost.
+Free for end users. Rate-limited to 3 drafts per IP per 24 hours to control LLM cost.
 
 **[Try it live →](https://cre-press-release-generator.vercel.app)**
 
@@ -46,7 +46,7 @@ Free for end users. Rate-limited to 5 drafts per IP per 24 hours to control LLM 
 │   ├── prompt.ts                      # System prompt (adapted from generator-prompt.md)
 │   ├── render.ts                      # .docx renderer
 │   ├── notify.ts                      # Plain-text lead notification via Resend
-│   └── rate-limit.ts                  # In-memory 5/IP/24hr limiter
+│   └── rate-limit.ts                  # In-memory 3/IP/24hr limiter
 ├── next.config.mjs
 ├── tsconfig.json
 ├── package.json
@@ -71,8 +71,8 @@ npm run dev            # http://localhost:3000
 |---|---|---|
 | `ANTHROPIC_API_KEY` | generation | Get from console.anthropic.com |
 | `RESEND_API_KEY` | email | Get from resend.com |
-| `RESEND_FROM` | email | e.g. `drafts@crenorthstar.com` — must be a verified sender |
-| `RESEND_REPLY_TO` | email | e.g. `hello@crenorthstar.com` |
+| `RESEND_FROM` | email | e.g. `drafts@yourdomain.com` — must be a verified sender |
+| `RESEND_REPLY_TO` | email | e.g. `hello@yourdomain.com` |
 | `NEXT_PUBLIC_SITE_URL` | attribution | Currently unused in v0.1 UI, reserved for footer link |
 | `NOTIFY_EMAIL` | lead alerts | Optional. Plain-text notification on every generate and every email submit. Unset = no notification |
 | `GENERATE_WEBHOOK` | lead capture | Optional Google Apps Script Web App URL, fired on a successful generate. Unset = silent no-op |

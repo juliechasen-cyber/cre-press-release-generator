@@ -17,6 +17,7 @@ type KeyStatUnit = (typeof KEY_STAT_UNITS)[number];
 type GenerateResponse = {
   draft_text: string;
   draft_html: string;
+  draft_signature: string;
   image_placement_note: string;
   warnings: string[];
   brief: UserBrief;
@@ -436,6 +437,7 @@ export default function Generator() {
           phone: emailForm.phone.trim(),
           subscribe_northstar: emailForm.subscribe_northstar,
           draft_text: result.draft_text,
+          draft_signature: result.draft_signature,
           brief: result.brief,
           slug,
         }),

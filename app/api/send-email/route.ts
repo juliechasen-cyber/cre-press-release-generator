@@ -3,6 +3,8 @@ import { Resend } from "resend";
 import { RELEASE_TYPE_LABELS, type UserBrief } from "@/lib/schema";
 import { renderDocx } from "@/lib/render";
 import { notifyLead } from "@/lib/notify";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { verifyDraft } from "@/lib/draft-signature";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -17,6 +19,7 @@ type SendPayload = {
   phone?: string;
   subscribe_northstar?: boolean;
   draft_text: string;
+  draft_signature?: string;
   brief: UserBrief;
   slug?: string;
 };
@@ -62,6 +65,21 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!verifyDraft(payload.draft_text, payload.draft_signature)) {
+    return NextResponse.json(
+      { error: "bad_signature", message: "Generate a draft first, then email it." },
+      { status: 403 },
+    );
+  }
+
+  const limit = checkRateLimit(`send-email:${getClientIp(request)}`);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "rate_limited", message: "You've hit today's email limit. Please try again tomorrow." },
+      { status: 429 },
+    );
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;
   const replyTo = process.env.RESEND_REPLY_TO;
@@ -93,8 +111,8 @@ export async function POST(request: Request) {
     `  • Have the broker approve or rewrite the [DRAFT QUOTE] line\n` +
     `  • Double-check every number against the source deal\n\n` +
     `We don't store your draft. If you need it again later, generate a new one — it takes about a minute.\n\n` +
-    `— The team behind CRE Northstar\n` +
-    `   crenorthstar.com\n\n` +
+    `— Julie Chasen\n` +
+    `   juliechasen.com\n\n` +
     `You received this because you asked us to email your draft. This is a one-time send.`;
 
   try {

@@ -58,7 +58,7 @@ Return a single JSON object with keys: draft_text, draft_html, image_placement_n
 9. Boilerplate — About <firm_name> header, then firm_boilerplate verbatim, or [FIRM BOILERPLATE] slot.
 10. Media contact block — Name, email, phone (fall back to broker values if media_contact_* fields are blank).
 11. End marker — ## on its own line.
-12. Footer — one blank line, then: Powered by CRE Northstar. (In draft_html, "CRE Northstar" is a link to https://crenorthstar.com.)
+12. Footer — one blank line, then: Powered by juliechasen.com (In draft_html, "juliechasen.com" is a link to https://juliechasen.com.)
 
 ## Type-specific rules
 
@@ -92,9 +92,9 @@ Total draft_text ≤ 400 words (excluding boilerplate, media contact block, end 
 
 ## What NOT to do
 
-- Do not use CRE Northstar's brand voice on the release itself. CRE Northstar only appears in the footer.
+- The footer is the only attribution line; keep everything else in the firm's own voice.
 - Do not add a Julie Chasen byline or contact.
-- Do not upsell CRE Northstar inside the body of the release.
+- Do not promote juliechasen.com or any other product inside the body of the release.
 - Do not add UTM parameters, tracking pixels, or anything unusual to the plain text.
 - Do not describe the image contents — you have not seen it.`;
 

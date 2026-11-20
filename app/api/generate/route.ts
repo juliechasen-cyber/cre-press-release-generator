@@ -7,7 +7,8 @@ import {
   type GeneratorOutput,
 } from "@/lib/schema";
 import { SYSTEM_PROMPT, buildUserMessage } from "@/lib/prompt";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { DAILY_DRAFT_LIMIT, checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { signDraft } from "@/lib/draft-signature";
 import { notifyLead } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -56,13 +57,13 @@ async function handleGenerate(request: Request): Promise<NextResponse> {
     );
   }
   const ip = getClientIp(request);
-  const limit = checkRateLimit(ip);
+  const limit = checkRateLimit(`generate:${ip}`);
   if (!limit.ok) {
     return NextResponse.json(
       {
         error: "rate_limited",
         message:
-          "You've hit the daily limit of 5 drafts. Email us if you need more.",
+          `You've hit the daily limit of ${DAILY_DRAFT_LIMIT} drafts. Please try again tomorrow.`,
         reset_at: new Date(limit.resetAt).toISOString(),
       },
       { status: 429 },
@@ -231,6 +232,7 @@ async function handleGenerate(request: Request): Promise<NextResponse> {
   return NextResponse.json(
     {
       ...parsedOutput,
+      draft_signature: signDraft(parsedOutput.draft_text),
       brief,
       rate_limit_remaining: limit.remaining,
     },

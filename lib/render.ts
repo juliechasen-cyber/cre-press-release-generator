@@ -109,7 +109,7 @@ export function parseDraft(draftText: string): Block[] {
       blocks.push({ kind: "end-marker" });
       continue;
     }
-    if (/^Powered by CRE Northstar$/i.test(trimmed)) {
+    if (/^Powered by (CRE Northstar|juliechasen\.com)\.?$/i.test(trimmed)) {
       flush();
       blocks.push({ kind: "footer" });
       continue;
@@ -260,7 +260,7 @@ export async function renderDocx(
             alignment: AlignmentType.CENTER,
             children: [
               new TextRun({ text: "Powered by ", italics: true, color: "666666" }),
-              new TextRun({ text: "CRE Northstar", italics: true, color: "666666" }),
+              new TextRun({ text: "juliechasen.com", italics: true, color: "666666" }),
             ],
           }),
         );

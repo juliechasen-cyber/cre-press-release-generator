@@ -6,7 +6,7 @@ export default function Home() {
       <header className="site-header">
         <div className="inner">
           <h1>CRE Press Release Generator</h1>
-          <div className="tag">Powered by CRE Northstar</div>
+          <div className="tag">Powered by juliechasen.com</div>
         </div>
       </header>
       <main>
